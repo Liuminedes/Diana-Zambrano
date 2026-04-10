@@ -579,7 +579,7 @@ function submitLead() {
   // Construir mensaje del lead
   var sep = "━━━━━━━━━━━━━━━━━━━━";
   var leadMsg = [
-    "🔔 *NUEVO LEAD — KIA*",
+    "🔔 *¡Hola! estoy interesado en adquirir mi nuevo KIA, este es mi interés principal*",
     sep,
     "👤 *" + nombre + "* | 📱 " + telDisplay,
     "🚗 " + vehiculo,
