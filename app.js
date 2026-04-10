@@ -499,34 +499,115 @@ function escapeMsg(msg) {
   return (msg || "").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g,"\\n");
 }
 
-// ─── NOMBRE → WHATSAPP ────────────────────────────
+// ─── LEAD FORM → WHATSAPP ─────────────────────────
 var pendingMsg = "";
 
 function sendWa(msg) {
   pendingMsg = (msg || "").replace(/\\n/g, "\n");
   document.getElementById("waModal").classList.remove("open");
+  // Resetear formulario
+  leadReset();
   document.getElementById("nameModal").classList.add("open");
   document.body.style.overflow = "hidden";
   setTimeout(function() {
-    var inp = document.getElementById("nameInput");
-    inp.value = ""; inp.focus();
-  }, 120);
+    var inp = document.getElementById("leadNombre");
+    if (inp) inp.focus();
+  }, 150);
+}
+
+function leadReset() {
+  document.getElementById("leadStep1").style.display = "block";
+  document.getElementById("leadStep2").style.display = "none";
+  ["leadNombre","leadTelefono","leadVehiculo"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.value = ""; el.classList.remove("error"); }
+  });
+  ["leadPresupuesto","leadIngresos"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.value = ""; el.classList.remove("error"); }
+  });
+  document.querySelectorAll("input[name='empleo']").forEach(function(r){ r.checked = false; });
+  document.querySelectorAll("input[name='datacredito']").forEach(function(r){ r.checked = false; });
+}
+
+function leadNextStep() {
+  var nombre = (document.getElementById("leadNombre").value || "").trim();
+  var tel    = (document.getElementById("leadTelefono").value || "").trim();
+
+  var ok = true;
+  if (!nombre) {
+    document.getElementById("leadNombre").classList.add("error");
+    document.getElementById("leadNombre").focus();
+    ok = false;
+  } else {
+    document.getElementById("leadNombre").classList.remove("error");
+  }
+  if (!tel || tel.replace(/\D/g,"").length < 7) {
+    document.getElementById("leadTelefono").classList.add("error");
+    if (ok) document.getElementById("leadTelefono").focus();
+    ok = false;
+  } else {
+    document.getElementById("leadTelefono").classList.remove("error");
+  }
+  if (!ok) return;
+
+  document.getElementById("leadStep1").style.display = "none";
+  document.getElementById("leadStep2").style.display = "block";
+}
+
+function leadPrevStep() {
+  document.getElementById("leadStep2").style.display = "none";
+  document.getElementById("leadStep1").style.display = "block";
+}
+
+function submitLead() {
+  // Recoger datos
+  var nombre     = (document.getElementById("leadNombre").value || "").trim();
+  var tel        = (document.getElementById("leadTelefono").value || "").trim().replace(/\s/g,"");
+  var vehiculo   = (document.getElementById("leadVehiculo").value || "").trim() || "No especificado";
+  var presupuesto= document.getElementById("leadPresupuesto").value || "No especificado";
+  var ingresos   = document.getElementById("leadIngresos").value || "No especificado";
+
+  var empleoEl   = document.querySelector("input[name='empleo']:checked");
+  var empleo     = empleoEl ? empleoEl.value : "No especificado";
+  var dataEl     = document.querySelector("input[name='datacredito']:checked");
+  var datacredito= dataEl ? dataEl.value : "No especificado";
+
+  // Formatear teléfono
+  var telDisplay = tel.length >= 10 ? "+57 " + tel.slice(-10) : "+57 " + tel;
+
+  // Construir mensaje del lead
+  var sep = "━━━━━━━━━━━━━━━━━━━━";
+  var leadMsg = [
+    "🔔 *NUEVO LEAD — KIA*",
+    sep,
+    "👤 *" + nombre + "* | 📱 " + telDisplay,
+    "🚗 " + vehiculo,
+    "💰 " + presupuesto,
+    "💼 " + empleo + " | 💵 " + ingresos,
+    "📊 " + datacredito,
+    sep,
+    "_Lead generado desde el catálogo de Diana Carolina Zambrano_"
+  ].join("\n");
+
+  // Si había un mensaje pendiente (de ver un vehículo específico), lo combinamos
+  var finalMsg = leadMsg;
+  if (pendingMsg && pendingMsg.trim()) {
+    finalMsg = leadMsg + "\n\n" + "📋 *Consulta específica:*\n" + pendingMsg;
+  }
+
+  closeNameModalDirect();
+  // Abrir desde el número del cliente si está disponible
+  window.open("https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(finalMsg), "_blank");
 }
 
 function confirmName(skip) {
-  var rawName = document.getElementById("nameInput").value.trim();
-  var name    = (!skip && rawName.length > 0) ? rawName : null;
-  var finalMsg = pendingMsg;
-  if (name) {
-    finalMsg = finalMsg
-      .replace("¡Hola Diana! 👋", "¡Hola Diana! 👋 Soy *" + name + "*")
-      .replace("¡Hola Diana!",    "¡Hola Diana! Soy *" + name + "*");
-    if (finalMsg.indexOf(name) === -1) {
-      finalMsg = "Mi nombre es *" + name + "*.\n\n" + finalMsg;
-    }
+  // Compatibilidad — redirige al submit del lead
+  if (skip) {
+    closeNameModalDirect();
+  } else {
+    submitLead();
   }
-  closeNameModalDirect();
-  window.open("https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(finalMsg), "_blank");
 }
 
 function closeNameModal(e) {
