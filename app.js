@@ -9,38 +9,60 @@
 const WA_NUMBER = "573176593391";
 
 const WA_OPTIONS = [
-  { icon:"🚗", label:"Cotizar un vehículo",               msg:"¡Hola Diana! Me gustaría cotizar un vehículo KIA. ¿Me puedes ayudar?" },
-  { icon:"💳", label:"Opciones de financiación",           msg:"¡Hola Diana! Quiero información sobre las opciones de financiación y cuotas disponibles." },
-  { icon:"💰", label:"Compra de contado",                  msg:"¡Hola Diana! Estoy interesado/a en comprar un KIA de contado. ¿Qué beneficios hay?" },
-  { icon:"🛡️", label:"Garantías y posventa",               msg:"¡Hola Diana! Quiero saber más sobre la garantía de 7 años / 150.000 km." },
-  { icon:"📦", label:"Disponibilidad y entrega inmediata", msg:"¡Hola Diana! ¿Qué modelos KIA tienen disponibles para entrega inmediata?" },
-  { icon:"🏎️", label:"Hablar directamente con Diana",      msg:"¡Hola Diana Zambrano! Quisiera hablar contigo sobre los vehículos KIA disponibles." },
+  { icon:"🚗", label:"Cotizar un vehículo",               needsLead:true,  tipo:"cotizar" },
+  { icon:"💳", label:"Opciones de financiación",           needsLead:true,  tipo:"financiar" },
+  { icon:"💰", label:"Compra de contado",                  needsLead:true,  tipo:"contado" },
+  { icon:"🛡️", label:"Garantías y posventa",               needsLead:false, msg:"¡Hola Diana! 😊 Quiero saber más sobre la garantía de 7 años / 150.000 km que ofrecen los KIA. ¿Me puedes explicar qué cubre?" },
+  { icon:"📦", label:"Disponibilidad y entrega inmediata", needsLead:false, msg:"¡Hola Diana! 😊 ¿Qué modelos KIA tienen disponibles para entrega inmediata? Me gustaría conocer opciones." },
+  { icon:"🏎️", label:"Hablar directamente con Diana",      needsLead:false, msg:"¡Hola Diana! 😊 Quisiera hablar contigo directamente sobre los vehículos KIA disponibles." },
 ];
 
 function buildVehicleWaMsg(v, version, year, trimPrice) {
-  var isEV   = v.tag === "Eléctrico";
-  var price  = trimPrice || getDisplayPrice(v);
-  var vStr   = version ? " · " + version + " " + year : "";
-  var pType  = isEV ? "Precio público sugerido" : "Precio lista sugerido";
-  return [
-    "¡Hola Diana! 👋",
-    "",
-    "Estoy interesado/a en el *" + v.name + vStr + "* y me gustaría recibir una cotización personalizada.",
-    "",
-    "📋 *Información del vehículo:*",
-    "• Modelo: " + v.name + vStr,
-    "• Categoría: " + v.category,
-    "• Tipo: " + v.tag,
-    "• " + pType + ": *" + fp(price) + "*",
-    "",
-    "💬 Me gustaría conocer:",
-    "• Precio final con descuentos",
-    "• Opciones de financiación y cuotas",
-    "• Colores y versiones disponibles",
-    "• Tiempo de entrega",
-    "",
-    "¡Quedo atento/a a tu respuesta! 🏎️",
-  ].join("\n");
+  // Devuelve contexto del vehículo — el mensaje final lo construye buildMsgFromLead
+  var vStr = version ? v.name + " " + version + " " + year : v.name;
+  return {
+    vehiculo:  vStr,
+    precio:    fp(trimPrice || getDisplayPrice(v)),
+    categoria: v.category,
+    tipo:      "cotizar_vehiculo"
+  };
+}
+
+function buildMsgFromLead(lead, contexto) {
+  var nombre      = lead.nombre;
+  var tel         = lead.tel;
+  var vehiculo    = lead.vehiculo    || "cualquier KIA";
+  var presupuesto = lead.presupuesto || "";
+  var empleo      = lead.empleo      || "";
+  var ingresos    = lead.ingresos    || "";
+  var datacredito = lead.datacredito || "";
+  var tipo        = contexto.tipo    || "cotizar";
+
+  var apertura = "";
+  if (tipo === "cotizar_vehiculo") {
+    apertura = "Hola Diana! 😊 Me llamo *" + nombre + "* y vi el *" + vehiculo + "* en tu catálogo — me interesa mucho.";
+  } else if (tipo === "cotizar") {
+    apertura = "Hola Diana! 😊 Soy *" + nombre + "* y estoy buscando cotizar un KIA que se ajuste a lo que necesito.";
+  } else if (tipo === "financiar") {
+    apertura = "Hola Diana! 😊 Mi nombre es *" + nombre + "* y me interesa financiar un KIA — quiero saber cómo funciona.";
+  } else if (tipo === "contado") {
+    apertura = "Hola Diana! 😊 Soy *" + nombre + "* y estoy evaluando comprar un KIA de contado — quiero saber qué beneficios hay.";
+  }
+
+  var lineas = [apertura, ""];
+  if (presupuesto) lineas.push("Mi presupuesto anda por los *" + presupuesto + "*,");
+  if (empleo || ingresos) {
+    var fin = "soy *" + (empleo || "—") + "* con ingresos de *" + (ingresos || "—") + "* al mes";
+    if (datacredito === "Sin reportes ✅") {
+      fin += " y estoy sin reportes en Datacrédito ✅";
+    } else if (datacredito === "Con reportes ⚠️") {
+      fin += " y tengo algunos reportes en Datacrédito ⚠️";
+    }
+    lineas.push(fin + ".");
+  }
+  lineas.push("");
+  lineas.push("Me puedes contactar al *" + tel + "* — ¡gracias de antemano! 🙏");
+  return lineas.join("\n");
 }
 
 // ─── CATÁLOGO ─────────────────────────────────────
@@ -453,39 +475,27 @@ function closeVehicleModalDirect() {
 
 // ─── WA: con vehículo ─────────────────────────────
 function openWaWithVehicle(v, version, year, trimPrice) {
-  var msg = buildVehicleWaMsg(v, version, year, trimPrice);
-  var container = document.getElementById("waOptions");
-
-  var optHtml = WA_OPTIONS.map(function(o) {
-    return '<button class="wa-option" onclick="sendWa(\'' + escapeMsg(o.msg) + '\')">' +
-      '<span class="wa-option-icon">' + o.icon + '</span>' +
-      '<span>' + o.label + '</span>' +
-      '<span class="wa-option-arrow">›</span>' +
-    '</button>';
-  }).join("");
-
-  container.innerHTML =
-    '<button class="wa-option wa-option-highlight" onclick="sendWa(\'' + escapeMsg(msg) + '\')">' +
-      '<span class="wa-option-icon">🚗</span>' +
-      '<div class="wa-option-text">' +
-        '<span class="wa-option-label">Cotizar el ' + v.name + '</span>' +
-        '<span class="wa-option-sub">Precio desde ' + fp(getDisplayPrice(v)) + ' · Mensaje pre-armado</span>' +
-      '</div>' +
-      '<span class="wa-option-arrow">›</span>' +
-    '</button>' +
-    '<div class="wa-divider">o elige otra consulta</div>' +
-    optHtml;
-
-  document.getElementById("waModal").classList.add("open");
-  document.body.style.overflow = "hidden";
+  // Guarda contexto del vehículo para el formulario
+  pendingContext = buildVehicleWaMsg(v, version, year, trimPrice);
   vehicleModal.classList.remove("open");
+  leadReset();
+  // Prellenar el vehículo en el formulario
+  setTimeout(function() {
+    var el = document.getElementById("leadVehiculo");
+    if (el) el.value = pendingContext.vehiculo || "";
+  }, 80);
+  document.getElementById("nameModal").classList.add("open");
+  document.body.style.overflow = "hidden";
 }
 
 // ─── WA: menú general ─────────────────────────────
-function openWa(prefillMsg) {
+function openWa() {
   var container = document.getElementById("waOptions");
   container.innerHTML = WA_OPTIONS.map(function(o) {
-    return '<button class="wa-option" onclick="sendWa(\'' + escapeMsg(prefillMsg || o.msg) + '\')">' +
+    var onclick = o.needsLead
+      ? "openLeadForm('" + o.tipo + "')"
+      : "sendWaDirect('" + escapeMsg(o.msg) + "')";
+    return '<button class="wa-option" onclick="' + onclick + '">' +
       '<span class="wa-option-icon">' + o.icon + '</span>' +
       '<span>' + o.label + '</span>' +
       '<span class="wa-option-arrow">›</span>' +
@@ -493,6 +503,26 @@ function openWa(prefillMsg) {
   }).join("");
   document.getElementById("waModal").classList.add("open");
   document.body.style.overflow = "hidden";
+}
+
+function openLeadForm(tipo) {
+  pendingContext = { tipo: tipo };
+  document.getElementById("waModal").classList.remove("open");
+  leadReset();
+  document.getElementById("nameModal").classList.add("open");
+  document.body.style.overflow = "hidden";
+  setTimeout(function() {
+    var inp = document.getElementById("leadNombre");
+    if (inp) inp.focus();
+  }, 150);
+}
+
+function sendWaDirect(msg) {
+  // Para opciones sin formulario — va directo a WA
+  msg = (msg || "").replace(/\\n/g, "\n");
+  document.getElementById("waModal").classList.remove("open");
+  document.body.style.overflow = "";
+  window.open("https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(msg), "_blank");
 }
 
 function escapeMsg(msg) {
@@ -501,11 +531,13 @@ function escapeMsg(msg) {
 
 // ─── LEAD FORM → WHATSAPP ─────────────────────────
 var pendingMsg = "";
+var pendingContext = {};
 
 function sendWa(msg) {
+  // Compatibilidad con opciones del vehicle modal que tienen needsLead
+  pendingContext = { tipo: "cotizar" };
   pendingMsg = (msg || "").replace(/\\n/g, "\n");
   document.getElementById("waModal").classList.remove("open");
-  // Resetear formulario
   leadReset();
   document.getElementById("nameModal").classList.add("open");
   document.body.style.overflow = "hidden";
@@ -561,43 +593,38 @@ function leadPrevStep() {
 }
 
 function submitLead() {
-  // Recoger datos
   var nombre     = (document.getElementById("leadNombre").value || "").trim();
-  var tel        = (document.getElementById("leadTelefono").value || "").trim().replace(/\s/g,"");
-  var vehiculo   = (document.getElementById("leadVehiculo").value || "").trim() || "No especificado";
-  var presupuesto= document.getElementById("leadPresupuesto").value || "No especificado";
-  var ingresos   = document.getElementById("leadIngresos").value || "No especificado";
+  var tel        = (document.getElementById("leadTelefono").value || "").trim().replace(/\D/g,"");
+  var vehiculo   = (document.getElementById("leadVehiculo").value || "").trim();
+  var presupuesto= document.getElementById("leadPresupuesto").value || "";
+  var ingresos   = document.getElementById("leadIngresos").value || "";
+  var empleoEl   = document.querySelector("input[name=\'empleo\']:checked");
+  var empleo     = empleoEl ? empleoEl.value : "";
+  var dataEl     = document.querySelector("input[name=\'datacredito\']:checked");
+  var datacredito= dataEl ? dataEl.value : "";
 
-  var empleoEl   = document.querySelector("input[name='empleo']:checked");
-  var empleo     = empleoEl ? empleoEl.value : "No especificado";
-  var dataEl     = document.querySelector("input[name='datacredito']:checked");
-  var datacredito= dataEl ? dataEl.value : "No especificado";
+  // Teléfono display
+  var telDisplay = tel.length >= 10 ? "+57 " + tel.slice(-10) : (tel ? "+57 " + tel : "no indicado");
 
-  // Formatear teléfono
-  var telDisplay = tel.length >= 10 ? "+57 " + tel.slice(-10) : "+57 " + tel;
-
-  // Construir mensaje del lead
-  var sep = "━━━━━━━━━━━━━━━━━━━━";
-  var leadMsg = [
-    "🔔 *¡Hola! estoy interesado en adquirir mi nuevo KIA, este es mi interés principal*",
-    sep,
-    "👤 *" + nombre + "* | 📱 " + telDisplay,
-    "🚗 " + vehiculo,
-    "💰 " + presupuesto,
-    "💼 " + empleo + " | 💵 " + ingresos,
-    "📊 " + datacredito,
-    sep,
-    "_Lead generado desde el catálogo de Diana Carolina Zambrano_"
-  ].join("\n");
-
-  // Si había un mensaje pendiente (de ver un vehículo específico), lo combinamos
-  var finalMsg = leadMsg;
-  if (pendingMsg && pendingMsg.trim()) {
-    finalMsg = leadMsg + "\n\n" + "📋 *Consulta específica:*\n" + pendingMsg;
+  // Si el vehículo viene del contexto (modal de ficha), úsalo
+  if (!vehiculo && pendingContext && pendingContext.vehiculo) {
+    vehiculo = pendingContext.vehiculo;
   }
 
+  var lead = {
+    nombre:      nombre,
+    tel:         telDisplay,
+    vehiculo:    vehiculo || "cualquier KIA",
+    presupuesto: presupuesto,
+    empleo:      empleo,
+    ingresos:    ingresos,
+    datacredito: datacredito
+  };
+
+  var ctx = pendingContext || { tipo: "cotizar" };
+  var finalMsg = buildMsgFromLead(lead, ctx);
+
   closeNameModalDirect();
-  // Abrir desde el número del cliente si está disponible
   window.open("https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(finalMsg), "_blank");
 }
 
